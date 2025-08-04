@@ -28,15 +28,15 @@ GOOGLE_DOC_ID = os.getenv("GOOGLE_DOC_ID")
 SERVICE_ACCOUNT_CREDS = {
     "type": "service_account",
     "project_id": "reminder02",
-    "private_key_id": "YOUR-PRIVATE-KEY-ID",
+    "private_key_id": "4c1d4ae61d8687084fff41d6227a7cad6e4c6eb2",
     "private_key": os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"),
-    "client_email": "bot-access@reminder02.iam.gserviceaccount.com",
-    "client_id": "117146824938030014556",
+    "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
+    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
     "token_uri": "https://oauth2.googleapis.com/token",
     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bot-access%40reminder02.iam.gserviceaccount.com",
-    "universe_domain": "googleapis.com",
+    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.getenv('GOOGLE_CLIENT_EMAIL').replace('@', '%40')}",
+    "universe_domain": "googleapis.com"
 }
 
 # Store active user jobs
