@@ -32,6 +32,7 @@ class ReminderBot:
         await update.message.reply_text(
             "Set reminder interval:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     
     async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
