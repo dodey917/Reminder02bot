@@ -1,0 +1,12 @@
+telegram-bots/
+├── bots/
+│   ├── __init__.py
+│   ├── reminder_bot.py       # Handles timed reminders
+│   └── docs_bot.py          # Handles Google Docs integration
+├── shared/
+│   ├── __init__.py
+│   ├── database.py          # Shared database connection
+│   └── config.py           # Shared configuration
+├── requirements.txt
+├── main.py                 # Entry point to run both bots
+└── .env                    # Environment variables
