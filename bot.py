@@ -164,6 +164,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id=user_id,
         data=minutes,
         name=str(user_id)
+    )
     
     # Store the job
     user_jobs[user_id] = [job]
