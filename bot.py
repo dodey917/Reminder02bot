@@ -1,30 +1,28 @@
-import os
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
-    JobQueue,
 )
-import httpx
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 # Configure logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Bot configuration
+# Configuration
 TELEGRAM_TOKEN = "8132609297:AAGEbi5QRXfg_Bzs9a2SnqDyE-PKZPHkP3k"
 GOOGLE_DOC_ID = "1wodxtiMwKBadOd8DoZpFccyqbMWRRCB8GgUEL-dFJHY"
 
-# Google API credentials from the JSON file
-SERVICE_ACCOUNT_INFO = {
+# Google Service Account Credentials
+SERVICE_ACCOUNT_CREDS = {
     "type": "service_account",
     "project_id": "reminder02",
     "private_key_id": "4c1d4ae61d8687084fff41d6227a7cad6e4c6eb2",
@@ -65,11 +63,11 @@ hu8etnnQdbIfPxgj9H4G6+8TTSnjQQMZGcldP3nxdJ4oaQ0UdD/QBpv/aoHa82XD
     "universe_domain": "googleapis.com"
 }
 
-# Dictionary to store user jobs
+# Store active user jobs
 user_jobs = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
+    """Send welcome message with reminder options."""
     user = update.effective_user
     keyboard = [
         [
@@ -77,55 +75,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             InlineKeyboardButton("30 min ⏰", callback_data="30"),
             InlineKeyboardButton("1 hour ⏰", callback_data="60"),
         ],
-        [
-            InlineKeyboardButton("Stop Reminders ❌", callback_data="stop"),
-        ]
+        [InlineKeyboardButton("Stop Reminders ❌", callback_data="stop")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Get content from Google Doc
     doc_content = await get_google_doc_content()
-    welcome_message = (
-        f"👋 Hello {user.mention_html()}! Welcome to the *iFart Token Mini App* Reminder Bot!\n\n"
+    welcome_msg = (
+        f"👋 Hello {user.mention_html()}! Welcome to *iFart Token Mini App* Reminder Bot!\n\n"
         f"{doc_content}\n\n"
-        "🚀 *Set your reminder interval below:*"
+        "🚀 Set your reminder interval:"
     )
     
     await update.message.reply_html(
-        welcome_message,
-        reply_markup=reply_markup
+        welcome_msg,
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def get_google_doc_content() -> str:
-    """Fetch content from the Google Doc."""
+    """Fetch content from Google Docs."""
     try:
-        # Authenticate with the service account
-        credentials = service_account.Credentials.from_service_account_info(
-            SERVICE_ACCOUNT_INFO,
+        creds = service_account.Credentials.from_service_account_info(
+            SERVICE_ACCOUNT_CREDS,
             scopes=['https://www.googleapis.com/auth/documents.readonly']
         )
-        
-        # Build the Google Docs service
-        service = build('docs', 'v1', credentials=credentials)
-        
-        # Get the document
+        service = build('docs', 'v1', credentials=creds)
         doc = service.documents().get(documentId=GOOGLE_DOC_ID).execute()
         
-        # Extract text content
         content = []
         for element in doc.get('body', {}).get('content', []):
             if 'paragraph' in element:
-                for para_element in element['paragraph']['elements']:
-                    if 'textRun' in para_element:
-                        content.append(para_element['textRun']['content'])
+                for para in element['paragraph']['elements']:
+                    if 'textRun' in para:
+                        content.append(para['textRun']['content'])
         
         return "".join(content).strip() or "⚠️ Important: Whale 🐳 are coming, fill your bag now! Buy before presale ends!"
     except Exception as e:
-        logger.error(f"Error fetching Google Doc: {e}")
+        logger.error(f"Google Doc error: {e}")
         return "⚠️ Important: Whale 🐳 are coming, fill your bag now! Buy before presale ends!"
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle button presses."""
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle button callbacks."""
     query = update.callback_query
     await query.answer()
     
@@ -133,122 +121,98 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = query.message.chat_id
     
     if query.data == "stop":
-        # Cancel any existing jobs for this user
         if user_id in user_jobs:
             for job in user_jobs[user_id]:
                 job.schedule_removal()
             del user_jobs[user_id]
-            await query.edit_message_text(text="✅ Reminders stopped. Use /start to begin again.")
+            await query.edit_message_text("✅ Reminders stopped. Use /start to begin again.")
         else:
-            await query.edit_message_text(text="ℹ️ No active reminders to stop.")
+            await query.edit_message_text("ℹ️ No active reminders to stop.")
         return
     
-    # Parse the minutes from callback data
     try:
         minutes = int(query.data)
     except ValueError:
-        logger.error(f"Invalid callback data: {query.data}")
+        logger.error(f"Invalid callback: {query.data}")
         return
     
-    # Cancel any existing jobs for this user
+    # Remove existing jobs
     if user_id in user_jobs:
         for job in user_jobs[user_id]:
             job.schedule_removal()
     
-    # Create a new job
+    # Add new job
     job = context.job_queue.run_repeating(
-        send_reminder,
+        callback=send_reminder,
         interval=timedelta(minutes=minutes),
-        first=timedelta(seconds=10),
+        first=0,
         chat_id=chat_id,
         user_id=user_id,
         data=minutes,
         name=str(user_id)
-    )
     
-    # Store the job
     user_jobs[user_id] = [job]
     
-    # Update message
-    intervals = {
-        10: "10 minutes",
-        30: "30 minutes",
-        60: "1 hour"
-    }
+    intervals = {10: "10 minutes", 30: "30 minutes", 60: "1 hour"}
     await query.edit_message_text(
-        text=f"🔔 Reminder set for every *{intervals[minutes]}*!\n\n"
-             "You'll receive regular updates about iFart Token Mini App.\n\n"
-             "Use the *Stop Reminders* button to cancel.",
+        f"🔔 Reminders set every *{intervals[minutes]}*!\n\n"
+        "You'll receive regular updates about iFart Token Mini App.\n\n"
+        "Use *Stop Reminders* to cancel.",
         parse_mode="Markdown"
     )
 
 async def send_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the reminder message."""
+    """Send reminder message."""
     job = context.job
-    user_id = job.user_id
-    chat_id = job.chat_id
-    
-    # Get fresh content from Google Doc
-    reminder_message = await get_google_doc_content()
-    
-    # Add some emoji and formatting
-    formatted_message = (
-        f"🔔 *iFart Token Mini App Reminder*\n\n"
-        f"{reminder_message}\n\n"
-        f"⏰ Next reminder in {job.data} minutes"
-    )
-    
     try:
+        content = await get_google_doc_content()
         await context.bot.send_message(
-            chat_id=chat_id,
-            text=formatted_message,
+            chat_id=job.chat_id,
+            text=f"🔔 *iFart Token Reminder*\n\n{content}\n\n"
+                 f"⏰ Next reminder in {job.data} minutes",
             parse_mode="Markdown"
         )
     except Exception as e:
-        logger.error(f"Error sending reminder to user {user_id}: {e}")
-        # Remove the job if there's an error (e.g., user blocked the bot)
-        if user_id in user_jobs:
-            for job in user_jobs[user_id]:
-                job.schedule_removal()
-            del user_jobs[user_id]
+        logger.error(f"Reminder error: {e}")
+        if job.user_id in user_jobs:
+            for j in user_jobs[job.user_id]:
+                j.schedule_removal()
+            del user_jobs[job.user_id]
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a help message."""
-    help_text = (
-        "🤖 *iFart Token Mini App Reminder Bot Help*\n\n"
-        "/start - Begin interacting with the bot\n"
-        "/stop - Stop all reminders\n"
-        "/help - Show this help message\n\n"
-        "Use the buttons to set reminder intervals for important updates."
+    """Send help message."""
+    await update.message.reply_text(
+        "🤖 *iFart Token Mini App Bot Help*\n\n"
+        "/start - Begin with the bot\n"
+        "/stop - Cancel all reminders\n"
+        "/help - Show this message\n\n"
+        "Use buttons to set reminder intervals.",
+        parse_mode="Markdown"
     )
-    await update.message.reply_text(help_text, parse_mode="Markdown")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Stop all reminders for the user."""
+    """Handle /stop command."""
     user_id = update.effective_user.id
     if user_id in user_jobs:
         for job in user_jobs[user_id]:
             job.schedule_removal()
         del user_jobs[user_id]
-        await update.message.reply_text("✅ All reminders have been stopped.")
+        await update.message.reply_text("✅ All reminders stopped.")
     else:
-        await update.message.reply_text("ℹ️ You don't have any active reminders.")
+        await update.message.reply_text("ℹ️ No active reminders.")
 
 def main() -> None:
     """Start the bot."""
-    # Create the Application and pass it your bot's token.
     application = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # Add command handlers
+    
+    # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
     
-    # Add callback handler for buttons
-    application.add_handler(CallbackQueryHandler(button))
-    
-    # Run the bot until the user presses Ctrl-C
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Start polling
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
