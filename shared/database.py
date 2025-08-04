@@ -1,9 +1,10 @@
 import sqlite3
-from datetime import datetime
+from pathlib import Path
 
 class Database:
     def __init__(self):
-        self.conn = sqlite3.connect('bot_database.db')
+        self.db_path = Path(__file__).parent / "bot_database.db"
+        self.conn = sqlite3.connect(self.db_path)
         self._init_db()
 
     def _init_db(self):
