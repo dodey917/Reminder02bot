@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))
+
 import asyncio
 from bots.reminder_bot import ReminderBot
 from bots.docs_bot import DocsBot
